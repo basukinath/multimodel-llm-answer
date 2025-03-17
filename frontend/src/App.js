@@ -1,33 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Container,
-  Box,
-  Typography,
-  TextField,
-  Button,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Paper,
-  CircularProgress,
-  Grid,
-  Alert,
-} from '@mui/material';
-import { useDropzone } from 'react-dropzone';
-import axios from 'axios';
-
-const API_URL = 'http://localhost:8000/api';
+import './App.css';
 
 function App() {
+  const [file, setFile] = useState(null);
+  const [image, setImage] = useState(null);
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
+  const [generalQuestion, setGeneralQuestion] = useState('');
+  const [generalAnswer, setGeneralAnswer] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState('');
-  const [context, setContext] = useState('');
-  const [fileContent, setFileContent] = useState('');
-  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchModels();
@@ -35,10 +19,11 @@ function App() {
 
   const fetchModels = async () => {
     try {
-      const response = await axios.get(`${API_URL}/models`);
-      setModels(response.data.models);
-      if (response.data.models.length > 0) {
-        setSelectedModel(response.data.models[0].id);
+      const response = await fetch('http://localhost:8000/api/models');
+      const data = await response.json();
+      setModels(data.models);
+      if (data.models.length > 0) {
+        setSelectedModel(data.models[0]);
       }
     } catch (error) {
       console.error('Error fetching models:', error);
@@ -46,189 +31,285 @@ function App() {
     }
   };
 
-  const onDrop = async (acceptedFiles) => {
-    const file = acceptedFiles[0];
-    if (!file) return;
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      console.log('Selected file:', selectedFile.name, 'Type:', selectedFile.type, 'Size:', selectedFile.size);
+      setFile(selectedFile);
+      setError('');
+    }
+  };
 
-    console.log('File selected:', file.name, 'Type:', file.type, 'Size:', file.size);
-    setError(null);
+  const handleImageChange = (e) => {
+    const selectedImage = e.target.files[0];
+    if (selectedImage) {
+      console.log('Selected image:', selectedImage.name, 'Type:', selectedImage.type, 'Size:', selectedImage.size);
+      setImage(selectedImage);
+      setError('');
+    }
+  };
+
+  const handleFileUpload = async () => {
+    if (!file) {
+      setError('Please select a file first');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
 
     const formData = new FormData();
     formData.append('file', file);
 
     try {
-      setLoading(true);
-      let response;
-      if (file.type.startsWith('image/')) {
-        console.log('Uploading image...');
-        response = await axios.post(`${API_URL}/upload/image`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
-        console.log('Image upload response:', response.data);
-        setFileContent(response.data.text);
-      } else {
-        console.log('Uploading document...');
-        response = await axios.post(`${API_URL}/upload/document`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
-        console.log('Document upload response:', response.data);
-        setFileContent(response.data.content);
+      const response = await fetch('http://localhost:8000/api/upload/document', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to upload file');
       }
-      setContext(response.data.text || response.data.content);
+
+      const data = await response.json();
+      console.log('File uploaded successfully:', data);
+      setError('');
     } catch (error) {
       console.error('Error uploading file:', error);
-      console.error('Error response:', error.response?.data);
-      setError(error.response?.data?.detail || 'Failed to upload file. Please try again.');
+      setError(error.message || 'Failed to upload file');
     } finally {
       setLoading(false);
     }
   };
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'image/*': ['.png', '.jpg', '.jpeg'],
-      'application/pdf': ['.pdf'],
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-      'text/plain': ['.txt'],
-    },
-  });
+  const handleImageUpload = async () => {
+    if (!image) {
+      setError('Please select an image first');
+      return;
+    }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!question || !selectedModel) return;
+    setLoading(true);
+    setError('');
+
+    const formData = new FormData();
+    formData.append('file', image);
 
     try {
-      setLoading(true);
-      setError(null);
-      const response = await axios.post(`${API_URL}/ask`, {
-        question,
-        llm_model: selectedModel,
-        context: context || undefined,
+      const response = await fetch('http://localhost:8000/api/upload/image', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
-      setAnswer(response.data.answer);
-    } catch (error) {
-      console.error('Error asking question:', error);
-      if (error.response?.data?.error?.code === 'insufficient_quota') {
-        setError('API quota exceeded. Please check your OpenAI account billing details or contact support.');
-      } else {
-        setError(error.response?.data?.detail || 'Failed to get answer');
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to upload image');
       }
+
+      const data = await response.json();
+      console.log('Image uploaded successfully:', data);
+      setError('');
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      setError(error.message || 'Failed to upload image');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAskQuestion = async () => {
+    if (!question) {
+      setError('Please enter a question');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch('http://localhost:8000/api/ask', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          question,
+          llm_model: selectedModel,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to get answer');
+      }
+
+      const data = await response.json();
+      setAnswer(data.answer);
+      setError('');
+    } catch (error) {
+      console.error('Error getting answer:', error);
+      setError(error.message || 'Failed to get answer');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAskGeneralQuestion = async () => {
+    if (!generalQuestion) {
+      setError('Please enter a question');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch('http://localhost:8000/api/ask', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          question: generalQuestion,
+          llm_model: 'gpt2', // Use GPT-2 for general questions
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to get answer');
+      }
+
+      const data = await response.json();
+      setGeneralAnswer(data.answer);
+      setError('');
+    } catch (error) {
+      console.error('Error getting answer:', error);
+      setError(error.message || 'Failed to get answer');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" component="h1" gutterBottom align="center">
-        Multi-Model Search
-      </Typography>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Upload Document or Image
-            </Typography>
-            <Box
-              {...getRootProps()}
-              sx={{
-                border: '2px dashed #ccc',
-                borderRadius: 1,
-                p: 3,
-                textAlign: 'center',
-                cursor: 'pointer',
-                bgcolor: isDragActive ? 'action.hover' : 'background.paper',
-              }}
+    <div className="App">
+      <header className="App-header">
+        <h1>Multi-Model Search</h1>
+      </header>
+      <main className="App-main">
+        <div className="section">
+          <h2>General Questions</h2>
+          <div className="input-group">
+            <input
+              type="text"
+              value={generalQuestion}
+              onChange={(e) => setGeneralQuestion(e.target.value)}
+              placeholder="Ask any general question..."
+              className="question-input"
+            />
+            <button 
+              onClick={handleAskGeneralQuestion}
+              disabled={loading || !generalQuestion}
+              className="ask-button"
             >
-              <input {...getInputProps()} />
-              <Typography>
-                {isDragActive
-                  ? 'Drop the file here'
-                  : 'Drag and drop a file here, or click to select'}
-              </Typography>
-            </Box>
-            {loading && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-                <CircularProgress size={24} />
-              </Box>
-            )}
-            {fileContent && (
-              <Typography variant="body2" sx={{ mt: 2, color: 'success.main' }}>
-                File uploaded successfully!
-              </Typography>
-            )}
-          </Paper>
+              Ask
+            </button>
+          </div>
+          {generalAnswer && (
+            <div className="answer-box">
+              <h3>Answer:</h3>
+              <p>{generalAnswer}</p>
+            </div>
+          )}
+        </div>
 
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Ask a Question
-            </Typography>
-            <form onSubmit={handleSubmit}>
-              <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel>Select Model</InputLabel>
-                <Select
-                  value={selectedModel}
-                  onChange={(e) => setSelectedModel(e.target.value)}
-                  label="Select Model"
-                >
-                  {models.map((model) => (
-                    <MenuItem key={model.id} value={model.id}>
-                      {model.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+        <div className="section">
+          <h2>Document Upload</h2>
+          <div className="upload-section">
+            <input
+              type="file"
+              onChange={handleFileChange}
+              accept=".pdf,.txt,.doc,.docx"
+              className="file-input"
+            />
+            <button 
+              onClick={handleFileUpload}
+              disabled={loading || !file}
+              className="upload-button"
+            >
+              Upload Document
+            </button>
+          </div>
+        </div>
 
-              <TextField
-                fullWidth
-                multiline
-                rows={4}
-                label="Your Question"
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                sx={{ mb: 2 }}
-              />
+        <div className="section">
+          <h2>Image Upload</h2>
+          <div className="upload-section">
+            <input
+              type="file"
+              onChange={handleImageChange}
+              accept="image/*"
+              className="file-input"
+            />
+            <button 
+              onClick={handleImageUpload}
+              disabled={loading || !image}
+              className="upload-button"
+            >
+              Upload Image
+            </button>
+          </div>
+        </div>
 
-              <Button
-                type="submit"
-                variant="contained"
-                fullWidth
-                disabled={loading || !question || !selectedModel}
-              >
-                {loading ? <CircularProgress size={24} /> : 'Ask Question'}
-              </Button>
-            </form>
-          </Paper>
-        </Grid>
+        <div className="section">
+          <h2>Ask Questions About Uploaded Content</h2>
+          <div className="model-select">
+            <select 
+              value={selectedModel} 
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="model-dropdown"
+            >
+              {models.map((model) => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="input-group">
+            <input
+              type="text"
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              placeholder="Ask a question about the uploaded content..."
+              className="question-input"
+            />
+            <button 
+              onClick={handleAskQuestion}
+              disabled={loading || !question}
+              className="ask-button"
+            >
+              Ask
+            </button>
+          </div>
+          {answer && (
+            <div className="answer-box">
+              <h3>Answer:</h3>
+              <p>{answer}</p>
+            </div>
+          )}
+        </div>
 
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3, height: '100%' }}>
-            <Typography variant="h6" gutterBottom>
-              Answer
-            </Typography>
-            {answer ? (
-              <Typography>{answer}</Typography>
-            ) : (
-              <Typography color="text.secondary">
-                Ask a question to see the answer here
-              </Typography>
-            )}
-          </Paper>
-        </Grid>
-      </Grid>
-    </Container>
+        {loading && <div className="loading">Loading...</div>}
+        {error && <div className="error">{error}</div>}
+      </main>
+    </div>
   );
 }
 
