@@ -4,61 +4,49 @@ from docx import Document
 import io
 import logging
 
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class DocumentService:
-    async def process_document(self, file: UploadFile):
+    async def process_document(self, file: UploadFile) -> str:
         try:
-            logger.info(f"Received file: {file.filename}, content_type: {file.content_type}")
-            content = await file.read()
-            file_extension = file.filename.split('.')[-1].lower()
-            logger.info(f"Processing file with extension: {file_extension}")
+            logger.info(f"Processing document: {file.filename}, content_type: {file.content_type}")
             
-            if file_extension == 'pdf':
-                return self._process_pdf(content)
-            elif file_extension == 'docx':
-                return self._process_docx(content)
-            elif file_extension == 'txt':
-                return self._process_txt(content)
+            # Read file content
+            content = await file.read()
+            logger.info(f"File size: {len(content)} bytes")
+
+            if file.content_type == "application/pdf":
+                logger.info("Processing PDF file")
+                # Process PDF
+                pdf_file = io.BytesIO(content)
+                pdf_reader = PyPDF2.PdfReader(pdf_file)
+                
+                # Extract text from all pages
+                text = ""
+                for page in pdf_reader.pages:
+                    text += page.extract_text() + "\n"
+                
+                logger.info(f"Extracted {len(text)} characters from PDF")
+                return text
+            elif file.content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+                logger.info("Processing DOCX file")
+                # Process DOCX
+                doc_file = io.BytesIO(content)
+                doc = Document(doc_file)
+                text = ""
+                for paragraph in doc.paragraphs:
+                    text += paragraph.text + "\n"
+                logger.info("Successfully processed DOCX file")
+                return text
+            elif file.content_type == "text/plain":
+                logger.info("Processing TXT file")
+                # Process TXT
+                return content.decode("utf-8")
             else:
-                logger.error(f"Unsupported file type: {file_extension}")
-                raise ValueError(f"Unsupported file type: {file_extension}")
+                logger.error(f"Unsupported file type: {file.content_type}")
+                raise ValueError(f"Unsupported file type: {file.content_type}")
         except Exception as e:
             logger.error(f"Error processing document: {str(e)}")
-            raise
-    
-    def _process_pdf(self, content: bytes) -> str:
-        try:
-            pdf_file = io.BytesIO(content)
-            pdf_reader = PyPDF2.PdfReader(pdf_file)
-            text = ""
-            for page in pdf_reader.pages:
-                text += page.extract_text() + "\n"
-            logger.info("Successfully processed PDF file")
-            return text
-        except Exception as e:
-            logger.error(f"Error processing PDF: {str(e)}")
-            raise
-    
-    def _process_docx(self, content: bytes) -> str:
-        try:
-            doc_file = io.BytesIO(content)
-            doc = Document(doc_file)
-            text = ""
-            for paragraph in doc.paragraphs:
-                text += paragraph.text + "\n"
-            logger.info("Successfully processed DOCX file")
-            return text
-        except Exception as e:
-            logger.error(f"Error processing DOCX: {str(e)}")
-            raise
-    
-    def _process_txt(self, content: bytes) -> str:
-        try:
-            text = content.decode('utf-8')
-            logger.info("Successfully processed TXT file")
-            return text
-        except Exception as e:
-            logger.error(f"Error processing TXT: {str(e)}")
             raise 
